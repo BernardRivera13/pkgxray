@@ -118,9 +118,19 @@ def _extract_from_zip(archive_path: Path) -> List[ExtractedFile]:
 
 
 def _is_python_file(filename: str) -> bool:
-    """Retorna True si el archivo es código fuente Python o configuración relevante."""
+    """Retorna True si el archivo debe ser extraído para análisis.
+
+    Incluye código Python (.py) y archivos de configuración del paquete que
+    tienen su propio analizador dedicado (ConfigFileAnalyzer).  Estos últimos
+    NO son pasados a ast.parse() — el analizador los interpreta directamente
+    como TOML o INI según su extensión.
+    """
     lower = filename.lower()
-    return lower.endswith(".py") or lower.endswith("setup.cfg") or lower.endswith("pyproject.toml")
+    return (
+        lower.endswith(".py")
+        or lower.endswith("setup.cfg")
+        or lower.endswith("pyproject.toml")
+    )
 
 
 def _is_setup_file(filename: str) -> bool:

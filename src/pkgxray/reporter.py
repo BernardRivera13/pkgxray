@@ -64,6 +64,16 @@ def print_terminal_report(result: ScanResult) -> None:
         f"  [dim]{result.files_analyzed} archivos analizados[/dim]"
     )
 
+    # Advertencia de archivos omitidos
+    if result.skipped_files:
+        skipped_names = ", ".join(s["filename"].split("/")[-1] for s in result.skipped_files[:5])
+        more = f" (+{len(result.skipped_files) - 5} más)" if len(result.skipped_files) > 5 else ""
+        console.print(Panel(
+            f"[bold yellow]Advertencia:[/bold yellow] {len(result.skipped_files)} archivo(s) no pudieron analizarse "
+            f"(error de sintaxis o versión de Python incompatible): {skipped_names}{more}",
+            border_style="yellow",
+        ))
+
     if not result.findings:
         console.print("\n[bold green]¡No se encontraron patrones sospechosos![/bold green]\n")
         return
@@ -112,6 +122,8 @@ def generate_json_report(result: ScanResult) -> str:
         "risk_score": result.risk_score,
         "risk_level": result.risk_level,
         "files_analyzed": result.files_analyzed,
+        "files_skipped": len(result.skipped_files),
+        "skipped_files": result.skipped_files,
         "summary": result.summary,
         "findings": [
             {
@@ -205,6 +217,7 @@ def generate_html_report(result: ScanResult) -> str:
     <span style="color:#f39c12;">{result.summary['medium']} medio(s)</span> &nbsp;
     <span style="color:#2ecc71;">{result.summary['low']} bajo(s)</span>
   </div>
+  {f'<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 24px;margin-bottom:20px;"><strong>Advertencia:</strong> {len(result.skipped_files)} archivo(s) no pudieron analizarse por errores de sintaxis o versión de Python incompatible: ' + ', '.join(s["filename"].split("/")[-1] for s in result.skipped_files[:5]) + ('...' if len(result.skipped_files) > 5 else '') + '</div>' if result.skipped_files else ''}
   {no_findings_msg}
   {'<table><thead><tr><th>Severidad</th><th>Analizador</th><th>Archivo</th><th>Línea</th><th>Descripción</th><th>Fragmento</th></tr></thead><tbody>' + rows_html + '</tbody></table>' if result.findings else ''}
   <div class="footer">Generado por <strong>pkgxray</strong></div>

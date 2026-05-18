@@ -84,3 +84,5 @@ class ScanResult:
     risk_level: str
     files_analyzed: int
     summary: dict
+    skipped_files: list = field(default_factory=list)
+    # Each entry: {"filename": str, "reason": "syntax_error" | "parse_error"}

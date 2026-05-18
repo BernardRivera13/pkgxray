@@ -8,40 +8,68 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  # ── Docker-based tests (canonical, matches local dev) ──────────────────────
+  test-docker:
+    name: Tests (Docker / Python 3.11)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Build test image
+        run: docker build --target test -t pkgxray-test .
+
+      - name: Run unit tests
+        run: >
+          docker run --rm pkgxray-test
+          tests/ -v --tb=short -m "not slow"
+          --cov=src/pkgxray --cov-report=term-missing
+
+  # ── Matrix tests across Python versions (without Docker) ───────────────────
+  test-matrix:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+
       - name: Run tests
         run: pytest tests/ -v --tb=short -m "not slow"
 
+  # ── Publish to PyPI on version tags ────────────────────────────────────────
   publish:
-    needs: test
+    name: Publish to PyPI
+    needs: [test-docker, test-matrix]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Install build tools
         run: pip install build twine
+
       - name: Build package
         run: python -m build
+
       - name: Publish to PyPI
         env:
           TWINE_USERNAME: __token__

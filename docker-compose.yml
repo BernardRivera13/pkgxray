@@ -2,16 +2,32 @@ version: "3.8"
 
 services:
   test:
-    build: .
-    entrypoint: ["pytest"]
+    build:
+      context: .
+      target: test
+    # Override CMD to pass custom args: docker compose run test pytest tests/test_analyzers/ -v
     command: ["tests/", "-v", "--tb=short", "-m", "not slow"]
 
+  test-slow:
+    build:
+      context: .
+      target: test
+    command: ["tests/", "-v", "--tb=short", "-m", "slow"]
+
+  test-cov:
+    build:
+      context: .
+      target: test
+    command: ["tests/", "--cov=src/pkgxray", "--cov-report=term-missing", "-m", "not slow"]
+
   scan:
-    build: .
-    entrypoint: ["pkgxray"]
+    build:
+      context: .
+      target: prod
     command: ["scan", "requests"]
 
   scan-json:
-    build: .
-    entrypoint: ["pkgxray"]
+    build:
+      context: .
+      target: prod
     command: ["scan", "requests", "--format", "json"]

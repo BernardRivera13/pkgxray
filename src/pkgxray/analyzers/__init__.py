@@ -9,6 +9,7 @@ from pkgxray.analyzers.subprocess_calls import SubprocessAnalyzer
 from pkgxray.analyzers.obfuscation import ObfuscationAnalyzer
 from pkgxray.analyzers.setup_scripts import SetupScriptAnalyzer
 from pkgxray.analyzers.dynamic_imports import DynamicImportAnalyzer
+from pkgxray.analyzers.config_files import ConfigFileAnalyzer
 
 
 def get_all_analyzers() -> list:
@@ -22,6 +23,7 @@ def get_all_analyzers() -> list:
         ObfuscationAnalyzer(),
         SetupScriptAnalyzer(),
         DynamicImportAnalyzer(),
+        ConfigFileAnalyzer(),
     ]
 
 
@@ -39,5 +41,6 @@ __all__ = [
     "ObfuscationAnalyzer",
     "SetupScriptAnalyzer",
     "DynamicImportAnalyzer",
+    "ConfigFileAnalyzer",
     "get_all_analyzers",
 ]

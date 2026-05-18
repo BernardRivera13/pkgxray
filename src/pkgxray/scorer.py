@@ -12,20 +12,39 @@ SEVERITY_WEIGHTS = {
     Severity.CRITICAL: 15,
 }
 
-# Contribución máxima de cualquier analizador individual al puntaje final.
-# Esto evita que un solo analizador domine el score cuando hay muchas repeticiones
-# del mismo patrón legítimo (p.ej. una librería CLI que lee 20 variables de entorno).
-# El score final refleja cuántos *tipos* de comportamiento sospechoso hay,
-# no cuántas veces aparece uno solo.
-MAX_SCORE_PER_ANALYZER = 20
+# Per-analyzer score caps.
+#
+# The cap controls how much any single analyzer can contribute to the final
+# score, regardless of how many findings it produces.  Analyzers whose
+# patterns are almost exclusively malicious (obfuscation, setup_scripts) keep
+# a high ceiling.  Analyzers that fire frequently on legitimate packages
+# (network calls in an HTTP library, env reads in a CLI tool) are capped low
+# so they add signal without dominating the result.
+#
+# Calibrated against baseline scans of: more-itertools, attrs, click,
+# requests, paramiko.  Targets: requests → MODERATE, paramiko → HIGH,
+# a package with exec(b64decode)+setup hook+module-level subprocess → CRITICAL.
+ANALYZER_CAPS = {
+    "obfuscation":     20,  # exec(b64decode) — almost never legitimate
+    "setup_scripts":   20,  # install hooks — high-confidence attack vector
+    "code_exec":       15,  # eval/exec — suspicious but has legitimate uses
+    "subprocess":      12,  # subprocess calls — common in build tools
+    "filesystem":      12,  # destructive calls + sensitive paths
+    "network":          8,  # HTTP calls — normal for HTTP libraries
+    "dynamic_imports":  6,  # importlib — used in plugin systems
+    "env_access":       5,  # env reads — ubiquitous in CLI tools
+}
+_DEFAULT_CAP = 10  # fallback for any analyzer not listed above
 
 
 def calculate_risk_score(findings: List[Finding]) -> Tuple[int, str]:
     """Calcula un puntaje de riesgo de 0 a 100 a partir de una lista de hallazgos.
 
     El puntaje se calcula sumando los pesos por severidad de cada analizador,
-    pero limitando la contribución de cada analizador a MAX_SCORE_PER_ANALYZER
-    para evitar que patrones repetitivos y legítimos inflen artificialmente el score.
+    aplicando un tope individual por analizador (ANALYZER_CAPS) para que los
+    patrones legítimos frecuentes no inflen el score.  El resultado refleja
+    cuántos *tipos* distintos de comportamiento sospechoso están presentes y
+    cuán peligrosos son, no cuántas veces se repite un mismo patrón.
 
     Args:
         findings: Lista de objetos Finding producidos por los analizadores.
@@ -37,19 +56,21 @@ def calculate_risk_score(findings: List[Finding]) -> Tuple[int, str]:
     if not findings:
         return 0, "LOW"
 
-    # Agrupar peso por analizador y aplicar el tope individual
     weight_by_analyzer: dict = defaultdict(int)
     for f in findings:
         weight_by_analyzer[f.analyzer_name] += SEVERITY_WEIGHTS.get(f.severity, 0)
 
-    capped_total = sum(min(w, MAX_SCORE_PER_ANALYZER) for w in weight_by_analyzer.values())
+    capped_total = sum(
+        min(w, ANALYZER_CAPS.get(name, _DEFAULT_CAP))
+        for name, w in weight_by_analyzer.items()
+    )
     score = min(100, capped_total)
 
-    if score <= 20:
+    if score <= 15:
         level = "LOW"
-    elif score <= 40:
+    elif score <= 35:
         level = "MODERATE"
-    elif score <= 70:
+    elif score <= 60:
         level = "HIGH"
     else:
         level = "CRITICAL"

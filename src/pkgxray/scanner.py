@@ -1,5 +1,6 @@
 """Orquestador principal del escáner de pkgxray."""
 
+import ast
 import shutil
 import tempfile
 from datetime import datetime, timezone
@@ -42,8 +43,28 @@ def scan(package_name: str, version: Optional[str] = None) -> ScanResult:
         # Paso 3: Análisis
         analyzers = get_all_analyzers()
         all_findings = []
+        skipped_files = []
 
         for extracted_file in extracted_files:
+            # Para archivos .py: verificar parseabilidad antes de correr los analizadores.
+            # Los archivos de config (pyproject.toml, setup.cfg) tienen su propio analizador
+            # y no pasan por ast.parse(), así que se excluyen de esta comprobación.
+            if extracted_file.filename.lower().endswith(".py"):
+                try:
+                    ast.parse(extracted_file.content)
+                except SyntaxError:
+                    skipped_files.append({
+                        "filename": extracted_file.filename,
+                        "reason": "syntax_error",
+                    })
+                    continue
+                except Exception:
+                    skipped_files.append({
+                        "filename": extracted_file.filename,
+                        "reason": "parse_error",
+                    })
+                    continue
+
             for analyzer in analyzers:
                 # SetupScriptAnalyzer solo corre en archivos setup.py
                 if isinstance(analyzer, SetupScriptAnalyzer):
@@ -70,6 +91,7 @@ def scan(package_name: str, version: Optional[str] = None) -> ScanResult:
             risk_level=risk_level,
             files_analyzed=len(extracted_files),
             summary=summary,
+            skipped_files=skipped_files,
         )
 
     finally:
